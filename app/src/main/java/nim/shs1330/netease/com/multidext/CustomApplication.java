@@ -8,16 +8,22 @@ import android.support.multidex.MultiDex;
 import android.util.Log;
 
 import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.lang.reflect.Array;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
 import java.util.zip.ZipInputStream;
+import java.util.zip.ZipOutputStream;
 
 import dalvik.system.DexClassLoader;
 import dalvik.system.DexFile;
@@ -33,10 +39,10 @@ public class CustomApplication extends Application {
     private static Field findField(Object instance, String name) throws NoSuchFieldException {
         Class clazz = instance.getClass();
 
-        while(clazz != null) {
+        while (clazz != null) {
             try {
                 Field e = clazz.getDeclaredField(name);
-                if(!e.isAccessible()) {
+                if (!e.isAccessible()) {
                     e.setAccessible(true);
                 }
 
@@ -52,14 +58,24 @@ public class CustomApplication extends Application {
     @Override
     protected void attachBaseContext(Context base) {
         super.attachBaseContext(base);
+
+
         try {
             ApplicationInfo info = base.getPackageManager().getApplicationInfo(base.getPackageName(), PackageManager.GET_META_DATA);
             Log.d(TAG, "attachBaseContext: " + info.sourceDir);
+
+            //另一个dex的目录
+            File dexDir = new File(info.dataDir, "secondary");
+            if (!dexDir.exists()){
+                dexDir.mkdir();
+            }
             File sourceApk = new File(info.sourceDir);
+
+            String extractedFilePrefix = sourceApk.getName() + ".classes";
+
             ZipInputStream zis = new ZipInputStream(
                     new BufferedInputStream(
                             new FileInputStream(sourceApk)));
-            findField(base.getClassLoader(), "dexElementsSuppressedExceptions");
             while (true) {
                 ZipEntry entry = zis.getNextEntry();
                 if ((entry == null)) {
@@ -68,12 +84,62 @@ public class CustomApplication extends Application {
                 }
                 String name = entry.getName();
                 Log.d(TAG, "attachBaseContext: " + info.sourceDir + "下" + name);
+                if(name.equals("zhang.dex"))
+                {
+                    String fileName = extractedFilePrefix + ".zip"; //base.apk.classes.zip
+
+                    //data/0/user/<pkg-name>/secondary/base.apk.classes.zip
+                    File extractedFile = new File(dexDir, fileName);
+//                    if (!extractedFile.exists()){
+//                        extractedFile.createNewFile();
+//                    }
+
+                    InputStream in = new ZipFile(sourceApk).getInputStream(entry);
+                    ZipOutputStream out = null;
+                    File tmp = File.createTempFile(extractedFilePrefix, ".zip", extractedFile.getParentFile());
+
+                    try {
+                        out = new ZipOutputStream(new BufferedOutputStream(new FileOutputStream(tmp)));
+
+                        try {
+                            ZipEntry classesDex = new ZipEntry("classes.dex");
+                            classesDex.setTime(entry.getTime());
+                            out.putNextEntry(classesDex);
+                            byte[] buffer = new byte[16384];
+
+                            for(int length = in.read(buffer); length != -1; length = in.read(buffer)) {
+                                out.write(buffer, 0, length);
+                            }
+
+                            out.closeEntry();
+                        } finally {
+                            out.close();
+                        }
+
+                        if(!tmp.renameTo(extractedFile)) {
+
+                        }
+                    } finally {
+                        in.close();
+                        tmp.delete();
+                    }
+
+                    pathClassLoader(extractedFile, getClassLoader(), getFileStreamPath("zhang.dex"));
+                }
             }
         } catch (PackageManager.NameNotFoundException e) {
             e.printStackTrace();
         } catch (FileNotFoundException e) {
             e.printStackTrace();
         } catch (IOException e) {
+            e.printStackTrace();
+        } catch (InstantiationException e) {
+            e.printStackTrace();
+        } catch (InvocationTargetException e) {
+            e.printStackTrace();
+        } catch (NoSuchMethodException e) {
+            e.printStackTrace();
+        } catch (IllegalAccessException e) {
             e.printStackTrace();
         } catch (NoSuchFieldException e) {
             e.printStackTrace();
@@ -93,6 +159,13 @@ public class CustomApplication extends Application {
             Object o = c.newInstance();
 
             Log.d(TAG, "attachBaseContext: " + o.getClass());
+
+            Class ZhangActivity = Class.forName("ZhangActivity");
+            Object o1 =ZhangActivity.newInstance();
+            Method me = ZhangActivity.getDeclaredMethod("onCreate");
+            me.invoke(o1);
+            Log.d(TAG, "attachBaseContext: " + o1);
+
         } catch (NoSuchFieldException e) {
             e.printStackTrace();
         } catch (IllegalAccessException e) {
@@ -140,7 +213,7 @@ public class CustomApplication extends Application {
                 false,
                 apkFile,
                 DexFile.loadDex(apkFile.getCanonicalPath(), optDexFile.getAbsolutePath(), 0));
-        Object[] toAddElementArray = new Object[] { o };
+        Object[] toAddElementArray = new Object[]{o};
 
         System.arraycopy(dexElementsO, 0, newElements, 0, dexElementsO.length);
         System.arraycopy(toAddElementArray, 0, newElements, dexElementsO.length, toAddElementArray.length);

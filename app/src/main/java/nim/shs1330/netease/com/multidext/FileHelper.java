@@ -53,7 +53,7 @@ public class FileHelper {
     /**
      * 返回对应plugin包名路径下的基础路径
      * @param packageName
-     * @return data/data/<packageName>/files/plugin/<PlugInPackageName>
+     * @return data/user/0/<packageName>/files/plugin/<PlugInPackageName>
      */
     public static File getBasePluginDir(String packageName)
     {
