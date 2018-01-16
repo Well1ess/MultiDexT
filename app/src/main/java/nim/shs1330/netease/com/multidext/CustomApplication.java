@@ -62,7 +62,6 @@ public class CustomApplication extends Application {
 
         try {
             ApplicationInfo info = base.getPackageManager().getApplicationInfo(base.getPackageName(), PackageManager.GET_META_DATA);
-            Log.d(TAG, "attachBaseContext: " + info.sourceDir);
 
             //另一个dex的目录
             File dexDir = new File(info.dataDir, "secondary");
